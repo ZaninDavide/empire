@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>Empire</title>
+  <link rel="icon" href="https://media.goodgamestudios.com/www/favicon_12.ico">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+
+<h3>ACCEDI CON UN ACCOUNT DI EMPIRE</h3>
+Nome utente:<input type="text" id="username"/><br>
+Password:<input type="password" id="password"/><br>
+<button onClick="login()" id="login_button">Login</button>
+
+<br/><br/>
+
+ <!-- Tab links -->
+<div class="tab">
+  <button class="tablinks" onclick="openTab(event, 'tabMappa')" id="tabMappaButton">Mappa</button>
+  <button class="tablinks" onclick="openTab(event, 'tabCoal')" id="tabCoalButton">Coalizione</button>
+  <button class="tablinks" onclick="openTab(event, 'tabReports')" id="tabReportsButton">Battaglie</button>
+  <button class="tablinks" onclick="openTab(event, 'tabTrenini')" id="tabTreniniButton">Trenini</button>
+</div>
+
+<!-- Tab content -->
+<div id="tabMappa" class="tabcontent">
+
+<h3>INDIVIDUA OGGETTI SULLA MAPPA</h3>
+<label for="regno">Regno:</label>
+<select name="regno" id="regno">
+  <option value="impero">Grande Impero</option>
+  <option value="ghiacci">Ghiacci</option>
+  <option value="sabbie">Sabbie</option>
+  <option value="vette">Vette</option>
+  <option value="isole">Isole</option>
+</select><br>
+X: <input type="number" id="inputx" value="500"></input>
+Y: <input type="number" id="inputy"  value="500"></input><br>
+Ampiezza ricerca: <input type="number" id="squares" value="5" max="20" min="1"></input><br>
+<fieldset><legend>Query ricerca</legend>
+<input type="checkbox" id="lab" name="lab" value="lab" checked>
+<label for="lab">Laboratori</label><br>
+<input type="checkbox" id="monu" name="monu" value="monu" checked>
+<label for="monu">Monumenti</label><br>
+<input type="checkbox" id="forti80" name="forti80" value="forti80" checked>
+<label for="forti80">Forti della Tempesta 80</label><br>
+<input type="checkbox" id="forti70" name="forti70" value="forti70" checked>
+<label for="forti70">Forti della Tempesta 70</label><br>
+<input type="checkbox" id="forti40" name="forti40" value="forti40">
+<label for="forti40">Forti della Tempesta 40, 50, 60</label><br>
+<input type="checkbox" id="isole_acqua" name="isole_acqua" value="isole_acqua" checked>
+<label for="isole_acqua">Isole di Acquamarina</label><br>
+<input type="checkbox" id="isole" name="isole" value="isole">
+<label for="isole">Isole di Risorse</label><br>
+<input type="checkbox" id="rovine" name="rovine" value="rovine">
+<label for="rovine">Rovine con avamposti e senza coalizione</label><br>
+<input type="checkbox" id="player_free" name="player_free" value="player_free">
+<label for="player_free">Giocatori senza coalizione</label><br>
+<input type="checkbox" id="ghost" name="ghost" value="ghost">
+<label for="ghost">Ghost 70+<input type="number" id="input_livello_ghost" value="0" class="no-spinner" max="800" min="0"/></label><br>
+<input type="checkbox" id="villi_free" name="villi_free" value="villi_free">
+<label for="villi_free">Villaggi Liberi</label><br>
+<input type="checkbox" id="masna" name="masna" value="masna">
+<label for="masna">Masnadieri</label><br>
+<input type="checkbox" id="fortezze" name="fortezze" value="fortezze">
+<label for="fortezze">Fortezze</label><br>
+</fieldset>
+<br>
+<button id="search_button" onClick="requestLargeMap()" disabled>Cerca</button>
+<br/>
+<progress id="search_progress" value="0" max="1"></progress>
+<br>
+
+<h3>DATI RACCOLTI</h3>
+<div class="tableButtons">
+  <button onClick="download_map_table()" id="download_button" class="material-icons" title="Scarica tabella">download</button>
+  <!--<button onClick="copy_map_table()" id="copy_button" class="material-icons">content_copy</button>-->
+  <button onClick="clear_map_table()" id="clear_button" class="material-icons" title="Svuota tabella">cancel</button>
+</div>
+<table id="map_table">
+  <tr>
+    <th>LUOGO</th>
+    <th>POSIZIONE</th>
+    <th>INFO</th>
+  </tr>
+</table>
+
+<!-- End Tab -->
+</div>
+
+<!-- Tab content -->
+<div id="tabCoal" class="tabcontent">
+
+<h3>SCEGLI LE COALIZIONI DALLA CLASSIFICA</h3>
+<p>Utilizza questa funzione per immaginare una scontro tra due coalizioni e preparare la difesa o l'attacco. Seleziona le due coalizioni tramite la loro posizione nella classifica per punti potenza.</p>
+Coalizione 1: <input type="number" id="input_ally1" value="1" min="1"/> <br/>
+Coalizione 2: <input type="number" id="input_ally2" value="2" min="1"/> <br/><br/>
+Numero vicini: <input type="number" id="input_vicini" value="2" min="1"/> <br/>
+<input type="checkbox" id="distance_ava" name="distance_ava" value="distance_ava">
+<label for="distance_ava">Avamposti</label><br>
+<br /><br />
+<button id="ally_button" onClick="analyseAlly()" disabled>Analizza</button>
+<br /><br />
+
+<div class="tableButtons">
+  <button onClick="download_ally_table()" id="download_button" class="material-icons" title="Scarica tabella">download</button>
+  <!--<button onClick="download_ally_table_csv()" id="download_button" class="material-icons" title="Scarica tabella '.csv' con delimitatore punto-e-virgola.">grid_on</button>-->
+  <button onClick="clear_ally_table()" id="clear_button" class="material-icons" title="Svuota tabella">cancel</button>
+</div>
+<table id="ally_table">
+  <tr>
+    <th>GIOCATORE</th>
+    <th>COALIZIONE 1</th>
+    <th>COALIZIONE 2</th>
+  </tr>
+</table>
+
+<!-- End Tab -->
+</div>
+
+<!-- Tab content -->
+<div id="tabReports" class="tabcontent">
+
+  <h3>SALVA LE FORMAZIONI USATE IN BATTAGLIA</h3>
+  <p>Sotto trovi la lista dei report di battaglia e dei tuoi attacchi. Scarica la formazione d'attacco utilizzata per ripetere gli attacchi.</p>
+
+  <table id="reports_table">
+    <tr>
+      <th>REPORT</th>
+      <th>INFO</th>
+      <th>SALVA</th>
+    </tr>
+  </table>
+  
+<!-- End Tab -->
+</div>
+
+
+<!-- Tab content -->
+<div id="tabTrenini" class="tabcontent">
+
+  <h3>LANCIA ATTACCHI A RIPETIZONE</h3>
+  <p>Seleziona la formazione da usare in attacco, il comandante e i tuoi obiettivi; dunque lascia che gli attacchi vengano lanciati in automatico.</p>
+  <table id="trenini_table">
+    <tr>
+      <th>COMANDANTE</th>
+      <th>TRUPPE</th>
+      <th>OBIETTIVI</th>
+      <th>VAI</th>
+    </tr>
+  </table>
+<!-- End Tab -->
+</div>
+
+
+<!-- Table style -->
+<style id="tableStyle">
+table {
+  font-family: arial, sans-serif;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+}
+
+tr:hover {
+    background-color: #e9e9ed;
+}
+
+tr:nth-child(even) {
+  background-color: #dddddd;
+}
+
+.def b, b.def{
+  color: #0b7cb5;
+}
+
+.att b, b.att{
+  color: #952b2c;
+}
+</style>
+<script src="./utils.js"></script>
+<script src="./script.js"></script>
+</body>
+</html>
