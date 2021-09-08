@@ -48,7 +48,8 @@ let ally2_data = {}
 // 1034012
 // 1035009
 // 1035010
-const code = 1035010
+// 1036015
+const code = 1036015
 
 let myID = -1
 let myPP = -1
@@ -59,9 +60,11 @@ let ally_objects = []
 let reports = []
 let comma = []
 let pins = []
+let castels = []
 
 let current_report_id = -1
 let current_report_lid = -1
+let last_comma = null
 
 // events
 
@@ -266,6 +269,8 @@ function workMapPlayerData(data){
   }
 }
 
+let keep_alive_started = false
+
 function workMessage(code, data, line){
   switch(code) {
     case "gaa":
@@ -301,7 +306,23 @@ function workMessage(code, data, line){
           id: c.ID,
           name: c.N || ("Comandante " + (n+1).toString()),
         }))
-        fill_trenini_table()
+        if(castels.length & comma.length) fill_trenini_table()
+      }
+      // nomi e posizioni dei castelli
+      if(data.gcl.C){
+        const kingdoms = data.gcl.C
+        kingdoms.map(c => {
+          const this_kingdom_castels = c.AI
+          this_kingdom_castels.forEach(castel => {
+            castels.push({
+              kingdom: castel.KID,
+              x: castel.AI[1],
+              y: castel.AI[2],
+              name: castel.AI[10]
+            })
+          })
+        })
+        if(castels.length & comma.length) fill_trenini_table()
       }
     case "hgh":
       if(ally1_id === -1 || ally2_id === -1) workAllysList(data)
@@ -315,7 +336,17 @@ function workMessage(code, data, line){
       search_button.disabled = false
       ally_button.disabled = false
       if(data.MP) myPP = data.MP
+      
       socket.send("%xt%EmpireEx_9%gbl%1%{}%") // ask for pins
+
+      if(!keep_alive_started){
+        keep_alive_started = true
+        // after one minute this will start sending keep alive messages
+        setInterval(() => {
+          socket.send("%xt%EmpireEx_9%pin%1%<RoundHouseKick>%")
+        }, 60*1000);
+      }
+
       break;
     case "bls":
       // report intermidiate
@@ -334,12 +365,48 @@ function workMessage(code, data, line){
     case "gbl":
       if(data.BL){
         pins = data.BL.map(p => ({
-          name: p.N,
+          name: p.N, 
           x: p.X,
           y: p.Y,
           kingdom: p.K,
         }))
       }
+      break;
+    case "cat":
+      // your leader is coming back
+      if(data.A && data.A.UM && data.A.UM.L) {
+        const leader_id = data.A.UM.L.ID
+        const leader_name = data.A.UM.L.N
+        const leader = comma.filter(c => c.id === leader_id)[0]
+        const status_button = document.getElementById("via_" + leader_id)
+        if(leader && leader.resolve) {
+          const wait_seconds = data.A.M.TT - data.A.M.T + 5 + 5*Math.random() // I add 5-10 seconds
+          setTimeout(() => {
+            leader.resolve()
+            leader.resolve = undefined
+            leader.reject = undefined
+            // set the status to coming back
+            status_button.style.color = "black"
+            status_button.innerText = "LIBERO"
+          }, wait_seconds*1000)
+          // set the status to coming back
+          status_button.style.color = "green"
+          status_button.innerText = "IN RITORNO"
+          console.log(leader_name + " in ritorno.")
+        }
+      }
+    case "irc":
+      setTimeout(() => socket.send("%xt%EmpireEx_9%irc%1%{}%"), 500 + 500*Math.random())
+    default:
+      break;
+  }
+}
+
+function workError(code, error_number, line){
+  switch(code){
+    case "cra":
+      // un attacco non è riuscito a partire
+      last_comma.reject(error_number)
       break;
     default:
       break;
@@ -353,18 +420,20 @@ function batchSend(commands) {
 socket.onmessage = function(event) {
   event.data.text().then(res => {
     let info = res.split("%")
-    let code // = info[2]
+    let code = info[2]
     let data // = JSON.parse(info[5])
+    let is_error = false
     try{
       data = JSON.parse(info[5])
-      code = info[2]
     }catch{
-      data = info[5]
-      code = null
+      data = info[4]
+      is_error = true
     }
     
-    if(code !== null){
+    if(!is_error){
       workMessage(code, data, res)
+    }else{
+      workError(code, data, res)
     }
   })
 };
@@ -679,16 +748,16 @@ function fill_reports_table() {
 
 // ----------------------------- TRENINI ---------------------------------
 
-let trenini_counter = 0
-
 function fill_trenini_table(){
+  let select_from = c => `<select id="from_${c.id}">${castels.map(c => `<option value="${c.name}">${c.name}</option>`)}</select>`
   comma.forEach(c => {
     let treno = `
     <tr id="comma_${c.id}">
       <td>${c.name}</td>
       <td><input id="truppe_${c.id}" type="file" accept=".gge,.json,.txt" onchange='read_truppe(event,${c.id})'/></td>
+      <td>${select_from(c)}</td>
       <td>Luoghi contrassegnati</td>
-      <td><button id="via_${c.id}" onclick="start_trenino(${c.id})">VIA</button></td>
+      <td><button id="via_${c.id}" onclick="start_trenino(${c.id})">AVVIA</button></td>
     </tr>
 `
     trenini_table.innerHTML += treno
@@ -705,8 +774,59 @@ function read_truppe(event, comma_id){
 }
 
 function start_trenino(comma_id){
-  const via = document.getElementById("via_" + comma_id)
-  via.style.color = "green"
+  const start_button = document.getElementById("via_" + comma_id)
+  const from_select = document.getElementById("from_" + comma_id)
+  const truppe_input = document.getElementById("truppe_" + comma_id)
+
+  start_button.disabled = true
+  from_select.disabled = true
+  truppe_input.disabled = true
+  start_button.style.color = "green"
+
+  let from = castels.filter(c => c.name === from_select.value)[0]
+  let comandante = comma.filter(c => c.id === comma_id)[0]
+  let troops = comandante.truppe
+  let targets = pins
+  
+  trenino_loop(comma_id, troops, from, targets, 999)
+}
+
+function run_trenino(comandante, troops, from, target){
+  return new Promise((resolve, reject)=>{
+    attack(comandante.id, troops, from.x, from.y, target.x, target.y, target.kingdom, true)
+    console.log(`${comandante.name} ${from.x}:${from.y} → ${target.x}:${target.y}`)
+
+    const status_button = document.getElementById("via_" + comandante.id)
+    status_button.style.color = "orange"
+    status_button.innerText = "IN VIAGGIO"
+
+    comandante.resolve = resolve
+    comandante.reject = reject
+    last_comma = comandante
+  })
+}
+
+async function trenino_loop(comma_id, troops, from, targets, max_counter){
+  const comandante = comma.filter(c => c.id === comma_id)[0]
+  let counter = 0
+  while(counter < max_counter){
+    const target = targets[counter % targets.length]
+    await run_trenino(comandante, troops, from, target).then(() => {
+      // on fullfill
+      counter += 1
+    }, (error) => {
+      // on reject
+      console.error("error: " + error)
+      const status_button = document.getElementById("via_" + comandante.id)
+      status_button.style.color = "red"
+      status_button.innerText = "ERROR: " + error
+      counter = 99999999999999
+    })
+  }
+}
+
+function attack(leader_id, troops_set, fromX, fromY, toX, toY, kingdom = 0, piume = false){
+  socket.send(`%xt%EmpireEx_9%cra%1%{"SX":${fromX},"SY":${fromY},"TX":${toX},"TY":${toY},"KID":${kingdom},"LID":${leader_id},"WT":0,"HBW":-1,"BPC":0,"ATT":0,"AV":0,"LP":0,"FC":0,"PTT":${piume ? "1" : "0"},"SD":0,"ICA":0,"CD":99,"A":${JSON.stringify(troops_set)},"BKS":[]}%`)
 }
 
 // --------------------------------------------------------------
@@ -725,6 +845,7 @@ function pinForAlly(x, y, kingdom = 0, name = "Posizione", minutes = 60){
 const enemy_types = {
   "-1000": "Feudatario Straniero",
   "-601": "Accampamento Nomade",
+  "-411": "Accampamento dei Leoni",
   "-230": "Fortezza del Deserto",
   "-223": "Forte della Tempesta",
   "-221": "Torre dei Barbari",
