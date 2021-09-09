@@ -791,14 +791,14 @@ function start_trenino(comma_id){
   trenino_loop(comma_id, troops, from, targets, 999)
 }
 
-function run_trenino(comandante, troops, from, target){
+function run_trenino(comandante, troops, from, target, info){
   return new Promise((resolve, reject)=>{
-    attack(comandante.id, troops, from.x, from.y, target.x, target.y, target.kingdom, true)
+    attack(comandante.id, troops, from.x, from.y, target.x, target.y, target.kingdom, false)
     console.log(`${comandante.name} ${from.x}:${from.y} → ${target.x}:${target.y}`)
 
     const status_button = document.getElementById("via_" + comandante.id)
     status_button.style.color = "orange"
-    status_button.innerText = "IN VIAGGIO"
+    status_button.innerText = "IN VIAGGIO" + info
 
     comandante.resolve = resolve
     comandante.reject = reject
@@ -809,18 +809,23 @@ function run_trenino(comandante, troops, from, target){
 async function trenino_loop(comma_id, troops, from, targets, max_counter){
   const comandante = comma.filter(c => c.id === comma_id)[0]
   let counter = 0
-  while(counter < max_counter){
+  let error_counter = 0
+  // limit the number of attacks and consecutive errors allowed
+  while(counter < max_counter && error_counter < targets.length){
     const target = targets[counter % targets.length]
-    await run_trenino(comandante, troops, from, target).then(() => {
+    const info = " (" + (counter+1) + ")"
+    await run_trenino(comandante, troops, from, target, info).then(() => {
       // on fullfill
       counter += 1
+      error_counter = 0
     }, (error) => {
       // on reject
-      console.error("error: " + error)
+      console.error(comandante.name + " error " + error + ": " + errors[error])
       const status_button = document.getElementById("via_" + comandante.id)
       status_button.style.color = "red"
-      status_button.innerText = "ERROR: " + error
-      counter = 99999999999999
+      status_button.innerText = "Errore: " + errors[error]
+      counter += 1
+      error_counter += 1
     })
   }
 }
