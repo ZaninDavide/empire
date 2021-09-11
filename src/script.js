@@ -306,7 +306,7 @@ function workMessage(code, data, line){
           id: c.ID,
           name: c.N || ("Comandante " + (n+1).toString()),
         }))
-        if(castels.length & comma.length) fill_trenini_table()
+        if(castels.length && comma.length) fill_trenini_table()
       }
       // nomi e posizioni dei castelli
       if(data.gcl.C){
@@ -322,7 +322,7 @@ function workMessage(code, data, line){
             })
           })
         })
-        if(castels.length & comma.length) fill_trenini_table()
+        if(castels.length && comma.length) fill_trenini_table()
       }
     case "hgh":
       if(ally1_id === -1 || ally2_id === -1) workAllysList(data)
@@ -853,6 +853,7 @@ const enemy_types = {
   "-411": "Accampamento dei Leoni",
   "-230": "Fortezza del Deserto",
   "-223": "Forte della Tempesta",
+  "-222": "Torre delle Vette",
   "-221": "Torre dei Barbari",
   "-205": "Castello Masnadiero",
 }
