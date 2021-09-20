@@ -49,7 +49,8 @@ let ally2_data = {}
 // 1035009
 // 1035010
 // 1036015
-const code = 1036015
+// 1037003
+const code = 1037003
 
 let myID = -1
 let myPP = -1
@@ -828,6 +829,24 @@ async function trenino_loop(comma_id, troops, from, targets, max_counter){
       error_counter += 1
     })
   }
+
+  if(error_counter >= targets.length){
+    // this leader stopped because of too many errors
+    console.error(comandante.name + ": questo comandante si è bloccato a causa dei ripetuti errori")
+    notify(
+      comandante.name + " si è fermato",
+      "Impossibile inviare altri attacchi con questo comandante."
+    )
+  }
+  
+  if(counter >= max_counter){
+    // this leader stopped because of too many errors
+    console.log(comandante.name + ": questo comandante ha completato il ciclo di attacchi.")
+    notify(
+      comandante.name + " ha finito",
+      comandante.name + " ha completato il ciclo di attacchi."
+    )
+  }
 }
 
 function attack(leader_id, troops_set, fromX, fromY, toX, toY, kingdom = 0, piume = false){
@@ -851,6 +870,7 @@ const enemy_types = {
   "-1000": "Feudatario Straniero",
   "-601": "Accampamento Nomade",
   "-411": "Accampamento dei Leoni",
+  "-410": "Accampamento degli Orsi",
   "-230": "Fortezza del Deserto",
   "-223": "Forte della Tempesta",
   "-222": "Torre delle Vette",

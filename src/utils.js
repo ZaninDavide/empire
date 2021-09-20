@@ -167,4 +167,36 @@ function download(filename, text) {
 
     document.body.removeChild(element);
 }
-  
+
+// -------------------------- NOTIFY ---------------------------
+
+
+function notify(title, text) {
+  if (!window.Notification) {
+      console.log('Browser does not support notifications.');
+  } else {
+      // check if permission is already granted
+      if (Notification.permission === 'granted') {
+          // show notification here
+          var notify = new Notification(title, {
+            body: text,
+            // icon: "https://media.goodgamestudios.com/www/favicon_12.ico",
+          });
+      } else {
+          // request permission from user
+          Notification.requestPermission().then(function (p) {
+              if (p === 'granted') {
+                  // show notification here
+                  var notify = new Notification(title, {
+                      body: text,
+                      // icon: "https://media.goodgamestudios.com/www/favicon_12.ico",
+                  });
+              } else {
+                  console.log('User blocked notifications.');
+              }
+          }).catch(function (err) {
+              console.error(err);
+          });
+      }
+  }
+}
