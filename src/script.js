@@ -60,7 +60,7 @@ let objects = []
 let ally_objects = []
 let reports = []
 let comma = []
-let pins = []
+let pins = []; let pins_taken = false
 let castels = []
 
 let current_report_id = -1
@@ -307,7 +307,7 @@ function workMessage(code, data, line){
           id: c.ID,
           name: c.N || ("Comandante " + (n+1).toString()),
         }))
-        if(castels.length && comma.length) fill_trenini_table()
+        if(castels.length && comma.length && pins_taken) fill_trenini_table()
       }
       // nomi e posizioni dei castelli
       if(data.gcl.C){
@@ -323,7 +323,7 @@ function workMessage(code, data, line){
             })
           })
         })
-        if(castels.length && comma.length) fill_trenini_table()
+        if(castels.length && comma.length && pins_taken) fill_trenini_table()
       }
     case "hgh":
       if(ally1_id === -1 || ally2_id === -1) workAllysList(data)
@@ -371,6 +371,8 @@ function workMessage(code, data, line){
           y: p.Y,
           kingdom: p.K,
         }))
+        pins_taken = true
+        if(castels.length && comma.length && pins_taken) fill_trenini_table()
       }
       break;
     case "cat":
@@ -749,15 +751,32 @@ function fill_reports_table() {
 
 // ----------------------------- TRENINI ---------------------------------
 
+let comma_filled = false
 function fill_trenini_table(){
+  if(comma_filled) return;
+  comma_filled = true
+
   let select_from = c => `<select id="from_${c.id}">${castels.map(c => `<option value="${c.name}">${c.name}</option>`)}</select>`
+  let select_targets = (c) => {
+    let groups = [{name: "Tutti", count: pins.length}]
+    pins.forEach(p => {
+      let gs = groups.filter(g => g.name === p.name)
+      if(gs.length > 0){
+        let g = gs[0]
+        g.count += 1
+      }else{
+        groups.push({name: p.name, count: 1})
+      }
+    })
+    return `<select id="targets_${c.id}">${groups.map(group => `<option value="${group.name}">${group.name} (${group.count})</option>`)}</select>`
+  }
   comma.forEach(c => {
     let treno = `
     <tr id="comma_${c.id}">
       <td>${c.name}</td>
       <td><input id="truppe_${c.id}" type="file" accept=".gge,.json,.txt" onchange='read_truppe(event,${c.id})'/></td>
       <td>${select_from(c)}</td>
-      <td>Luoghi contrassegnati</td>
+      <td>${select_targets(c)}</td>
       <td><button id="via_${c.id}" onclick="start_trenino(${c.id})">AVVIA</button></td>
     </tr>
 `
@@ -778,16 +797,18 @@ function start_trenino(comma_id){
   const start_button = document.getElementById("via_" + comma_id)
   const from_select = document.getElementById("from_" + comma_id)
   const truppe_input = document.getElementById("truppe_" + comma_id)
+  const targets_name = document.getElementById("targets_" + comma_id)
 
   start_button.disabled = true
   from_select.disabled = true
   truppe_input.disabled = true
+  targets_name.disabled = true
   start_button.style.color = "green"
 
   let from = castels.filter(c => c.name === from_select.value)[0]
   let comandante = comma.filter(c => c.id === comma_id)[0]
   let troops = comandante.truppe
-  let targets = pins
+  let targets = (targets_name.value === "Tutti") ? pins : pins.filter(p => p.name === targets_name.value)
   
   trenino_loop(comma_id, troops, from, targets, 999)
 }

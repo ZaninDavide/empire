@@ -5,6 +5,11 @@ body {
   font-family: Roboto !important;
 }
 
+html.dark {
+  background: black;
+  filter: invert(1) hue-rotate(180deg);
+}
+
 
 button {    
   padding: 7px;
@@ -150,4 +155,10 @@ input[type=number].no-spinner {
   border-top: none;
   border-bottom-left-radius: 5px;
   border-bottom-right-radius: 5px;
+}
+
+#theme_button{
+  position: absolute;
+  top: 10px;
+  right: 10px;
 }

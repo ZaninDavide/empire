@@ -170,7 +170,6 @@ function download(filename, text) {
 
 // -------------------------- NOTIFY ---------------------------
 
-
 function notify(title, text) {
   if (!window.Notification) {
       console.log('Browser does not support notifications.');
@@ -200,3 +199,12 @@ function notify(title, text) {
       }
   }
 }
+
+// -------------------------- THEME ---------------------------
+
+function switch_theme(){
+  let html = document.getElementsByTagName("html")[0]
+  html.classList.toggle('dark');
+}
+
+if(window.matchMedia('(prefers-color-scheme: dark)').matches) switch_theme()
