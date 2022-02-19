@@ -15,6 +15,8 @@ const query_masna = document.getElementById("masna");
 const query_distance_ava = document.getElementById("distance_ava");
 const query_fortezze = document.getElementById("fortezze");
 
+const input_x = document.getElementById("inputx")
+const input_y = document.getElementById("inputy")
 const input_username = document.getElementById("username");
 const input_password = document.getElementById("password");
 const login_button = document.getElementById("login_button");
@@ -25,6 +27,8 @@ const input_ally1 = document.getElementById("input_ally1");
 const input_ally2 = document.getElementById("input_ally2");
 const input_vicini = document.getElementById("input_vicini");
 const input_livello_ghost = document.getElementById("input_livello_ghost");
+const select_castelli = document.getElementById("castelli");
+const select_regno = document.getElementById("regno");
 
 const map_table = document.getElementById("map_table");
 const map_table_vuota = map_table.innerHTML;
@@ -50,7 +54,18 @@ let ally2_data = {}
 // 1035010
 // 1036015
 // 1037003
-const code = 1037003
+// 1038014
+// 1039012
+// 1040007
+// 1040008
+// 1041011
+// 1042007
+// 1044002
+// 1045003
+// 1045004
+// 1045006
+// 1047010
+const code = 1047010
 
 let myID = -1
 let myPP = -1
@@ -61,7 +76,7 @@ let ally_objects = []
 let reports = []
 let comma = []
 let pins = []; let pins_taken = false
-let castels = []
+let castels = []; let castels_filled = false
 
 let current_report_id = -1
 let current_report_lid = -1
@@ -103,7 +118,7 @@ function workMapObjectData(data){
   const searchY = parseInt(document.getElementById("inputy").value)
   
   let kingdom = 0
-  const kingdom_select = document.getElementById("regno").value
+  const kingdom_select = select_regno.value
   if(kingdom_select === "impero") kingdom = 0
   if(kingdom_select === "sabbie") kingdom = 1
   if(kingdom_select === "ghiacci") kingdom = 2
@@ -311,12 +326,12 @@ function workMessage(code, data, line){
       }
       // nomi e posizioni dei castelli
       if(data.gcl.C){
-        const kingdoms = data.gcl.C
-        kingdoms.map(c => {
+        const kingdoms_list = data.gcl.C
+        kingdoms_list.map(c => {
           const this_kingdom_castels = c.AI
           this_kingdom_castels.forEach(castel => {
             castels.push({
-              kingdom: castel.KID,
+              kingdom: kingdoms[c.KID],
               x: castel.AI[1],
               y: castel.AI[2],
               name: castel.AI[10]
@@ -324,6 +339,7 @@ function workMessage(code, data, line){
           })
         })
         if(castels.length && comma.length && pins_taken) fill_trenini_table()
+        if(castels.length) fill_castels()
       }
     case "hgh":
       if(ally1_id === -1 || ally2_id === -1) workAllysList(data)
@@ -336,6 +352,7 @@ function workMessage(code, data, line){
       input_password.disabled = true
       search_button.disabled = false
       ally_button.disabled = false
+      select_castelli.disabled = false
       if(data.MP) myPP = data.MP
       
       socket.send("%xt%EmpireEx_9%gbl%1%{}%") // ask for pins
@@ -467,6 +484,7 @@ socket.onclose = function(event) {
   login_button.style.color = "red"
   search_button.disabled = true
   ally_button.disabled = true
+  select_castelli.disabled = true
 };
 
 socket.onerror = function(error) {
@@ -483,15 +501,16 @@ function login(){
 // SEARCH IN THE MAP
 function requestLargeMap(){
   search_button.disabled = true
+  select_castelli.disabled = true
   search_progress.style.display = "inline"
   
-  const centerX = parseInt(document.getElementById("inputx").value)
-  const centerY = parseInt(document.getElementById("inputy").value)
+  const centerX = parseInt(input_x.value)
+  const centerY = parseInt(input_y.value)
   const squares = parseInt(document.getElementById("squares").value)
   let kingdom = 0
   
   
-  const kingdom_select = document.getElementById("regno").value
+  const kingdom_select = select_regno.value
   if(kingdom_select === "impero") kingdom = 0
   if(kingdom_select === "sabbie") kingdom = 1
   if(kingdom_select === "ghiacci") kingdom = 2
@@ -531,6 +550,7 @@ function requestLargeMap(){
     
     if(cells_counter === squaresX * squaresY){
       search_button.disabled = false
+      select_castelli.disabled = false
       search_progress.style.display = "none"
       return;
     }else if (direction_counter === direction_goal) {
@@ -749,13 +769,30 @@ function fill_reports_table() {
   })
 }
 
+function fill_castels(){
+  castels_filled = true
+  castels.forEach(c => {
+    let option = document.createElement("option")
+    option.setAttribute("value", c.name)
+    option.innerHTML = c.name
+    select_castelli.appendChild(option)
+  })
+  select_castelli.onchange = e => {
+    let c = castels.filter(cc => cc.name == e.target.value)[0]
+    if(!c) return false;
+    input_x.value = c.x;
+    input_y.value = c.y;
+    select_regno.value = c.kingdom;
+  }
+}
+
 // ----------------------------- TRENINI ---------------------------------
 
 let comma_filled = false
 function fill_trenini_table(){
   if(comma_filled) return;
   comma_filled = true
-
+  
   let select_from = c => `<select id="from_${c.id}">${castels.map(c => `<option value="${c.name}">${c.name}</option>`)}</select>`
   let select_targets = (c) => {
     let groups = [{name: "Tutti", count: pins.length}]
@@ -770,6 +807,7 @@ function fill_trenini_table(){
     })
     return `<select id="targets_${c.id}">${groups.map(group => `<option value="${group.name}">${group.name} (${group.count})</option>`)}</select>`
   }
+  let check_piume = c => `<input type="checkbox" id="piume_${c.id}" /><label id="piume_label_${c.id}" for="piume_${c.id}">Piume</label>`
   comma.forEach(c => {
     let treno = `
     <tr id="comma_${c.id}">
@@ -777,6 +815,7 @@ function fill_trenini_table(){
       <td><input id="truppe_${c.id}" type="file" accept=".gge,.json,.txt" onchange='read_truppe(event,${c.id})'/></td>
       <td>${select_from(c)}</td>
       <td>${select_targets(c)}</td>
+      <td>${check_piume(c)}</td>
       <td><button id="via_${c.id}" onclick="start_trenino(${c.id})">AVVIA</button></td>
     </tr>
 `
@@ -798,24 +837,27 @@ function start_trenino(comma_id){
   const from_select = document.getElementById("from_" + comma_id)
   const truppe_input = document.getElementById("truppe_" + comma_id)
   const targets_name = document.getElementById("targets_" + comma_id)
+  const piume_check = document.getElementById("piume_" + comma_id)
 
   start_button.disabled = true
   from_select.disabled = true
   truppe_input.disabled = true
   targets_name.disabled = true
+  piume_check.disabled = true
   start_button.style.color = "green"
 
   let from = castels.filter(c => c.name === from_select.value)[0]
   let comandante = comma.filter(c => c.id === comma_id)[0]
   let troops = comandante.truppe
   let targets = (targets_name.value === "Tutti") ? pins : pins.filter(p => p.name === targets_name.value)
-  
-  trenino_loop(comma_id, troops, from, targets, 999)
+  let piume = piume_check.checked
+
+  trenino_loop(comma_id, troops, from, targets, piume, 999)
 }
 
-function run_trenino(comandante, troops, from, target, info){
+function run_trenino(comandante, troops, from, target, cavalli, info){
   return new Promise((resolve, reject)=>{
-    attack(comandante.id, troops, from.x, from.y, target.x, target.y, target.kingdom, false)
+    attack(comandante.id, troops, from.x, from.y, target.x, target.y, target.kingdom, cavalli)
     console.log(`${comandante.name} ${from.x}:${from.y} → ${target.x}:${target.y}`)
 
     const status_button = document.getElementById("via_" + comandante.id)
@@ -828,7 +870,7 @@ function run_trenino(comandante, troops, from, target, info){
   })
 }
 
-async function trenino_loop(comma_id, troops, from, targets, max_counter){
+async function trenino_loop(comma_id, troops, from, targets, piume, max_counter){
   const comandante = comma.filter(c => c.id === comma_id)[0]
   let counter = 0
   let error_counter = 0
@@ -836,7 +878,8 @@ async function trenino_loop(comma_id, troops, from, targets, max_counter){
   while(counter < max_counter && error_counter < targets.length){
     const target = targets[counter % targets.length]
     const info = " (" + (counter+1) + ")"
-    await run_trenino(comandante, troops, from, target, info).then(() => {
+    const cavalli = piume ? "piume" : "no"
+    await run_trenino(comandante, troops, from, target, cavalli, info).then(() => {
       // on fullfill
       counter += 1
       error_counter = 0
@@ -870,8 +913,10 @@ async function trenino_loop(comma_id, troops, from, targets, max_counter){
   }
 }
 
-function attack(leader_id, troops_set, fromX, fromY, toX, toY, kingdom = 0, piume = false){
-  socket.send(`%xt%EmpireEx_9%cra%1%{"SX":${fromX},"SY":${fromY},"TX":${toX},"TY":${toY},"KID":${kingdom},"LID":${leader_id},"WT":0,"HBW":-1,"BPC":0,"ATT":0,"AV":0,"LP":0,"FC":0,"PTT":${piume ? "1" : "0"},"SD":0,"ICA":0,"CD":99,"A":${JSON.stringify(troops_set)},"BKS":[]}%`)
+function attack(leader_id, troops_set, fromX, fromY, toX, toY, kingdom = 0, cavalli = "no"){
+  const piume_field = cavalli === "piume" ? 1 : 0
+  const cavalli_monete = cavalli === "monete" ? 1021 : -1
+  socket.send(`%xt%EmpireEx_9%cra%1%{"SX":${fromX},"SY":${fromY},"TX":${toX},"TY":${toY},"KID":${kingdom},"LID":${leader_id},"WT":0,"HBW":-1,"BPC":0,"ATT":0,"AV":0,"LP":0,"FC":0,"PTT":${piume_field},"SD":0,"ICA":0,"CD":99,"A":${JSON.stringify(troops_set)},"BKS":[]}%`)
 }
 
 // --------------------------------------------------------------
@@ -887,8 +932,18 @@ function pinForAlly(x, y, kingdom = 0, name = "Posizione", minutes = 60){
 
 // --------------------------------------------------------------
 
+const kingdoms = {
+  0: "impero",
+  1: "sabbie",
+  2: "ghiacci",
+  3: "vette",
+  4: "isole",
+}
+
 const enemy_types = {
+  "-1002": "Castello dei Corvicremisi",
   "-1000": "Feudatario Straniero",
+  "-651": "Accampamento dei Samurai",
   "-601": "Accampamento Nomade",
   "-411": "Accampamento dei Leoni",
   "-410": "Accampamento degli Orsi",
@@ -896,6 +951,7 @@ const enemy_types = {
   "-223": "Forte della Tempesta",
   "-222": "Torre delle Vette",
   "-221": "Torre dei Barbari",
+  "-220": "Torre del Deserto",
   "-205": "Castello Masnadiero",
 }
 

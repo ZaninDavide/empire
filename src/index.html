@@ -40,12 +40,15 @@ Password:<input type="password" id="password"/><br>
   <option value="isole">Isole</option>
 </select><br>
 X: <input type="number" id="inputx" value="500"></input>
-Y: <input type="number" id="inputy"  value="500"></input><br>
+Y: <input type="number" id="inputy"  value="500"></input>
+<select name="castelli" id="castelli">
+  <option value="-">-</option>
+</select><br>
 Ampiezza ricerca: <input type="number" id="squares" value="5" max="20" min="1"></input><br>
 <fieldset><legend>Query ricerca</legend>
-<input type="checkbox" id="lab" name="lab" value="lab" checked>
+<input type="checkbox" id="lab" name="lab" value="lab">
 <label for="lab">Laboratori</label><br>
-<input type="checkbox" id="monu" name="monu" value="monu" checked>
+<input type="checkbox" id="monu" name="monu" value="monu">
 <label for="monu">Monumenti</label><br>
 <input type="checkbox" id="forti80" name="forti80" value="forti80" checked>
 <label for="forti80">Forti della Tempesta 80</label><br>
@@ -67,7 +70,7 @@ Ampiezza ricerca: <input type="number" id="squares" value="5" max="20" min="1"><
 <label for="villi_free">Villaggi Liberi</label><br>
 <input type="checkbox" id="masna" name="masna" value="masna">
 <label for="masna">Masnadieri</label><br>
-<input type="checkbox" id="fortezze" name="fortezze" value="fortezze">
+<input type="checkbox" id="fortezze" name="fortezze" value="fortezze" checked>
 <label for="fortezze">Fortezze</label><br>
 </fieldset>
 <br>
@@ -152,6 +155,7 @@ Numero vicini: <input type="number" id="input_vicini" value="2" min="1"/> <br/>
       <th>TRUPPE</th>
       <th>PARTENZA</th>
       <th>OBIETTIVI</th>
+      <th>PIUME</th>
       <th>STATUS</th>
     </tr>
   </table>
