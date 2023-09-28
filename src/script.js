@@ -65,7 +65,33 @@ let ally2_data = {}
 // 1045004
 // 1045006
 // 1047010
-const code = 1047010
+// 1048012
+// 1049016
+// 1050031
+// 1050034
+// 1051037
+// 1052025
+// 1052027
+// 1053011
+// 1053014
+// 1053019
+// 1054007
+// 1055008
+// 1057002
+// 1059006
+// 1060015
+// 1061002
+// 1062006
+// 1063004
+// 1064005
+// 1065004
+// 1073005
+// 1074010
+// 1075003
+// 1078016
+// 1085006
+// 1086007
+const code = 1086007
 
 let myID = -1
 let myPP = -1
@@ -316,8 +342,8 @@ function workMessage(code, data, line){
       }
       // comma & castellani
       if(data.gli){
-        // const castellani = data.gli.b
-        const comandanti = data.gli.G
+        // const castellani = data.gli.B
+        const comandanti = data.gli.C
         comma = comandanti.map((c, n) => ({
           id: c.ID,
           name: c.N || ("Comandante " + (n+1).toString()),
@@ -330,10 +356,12 @@ function workMessage(code, data, line){
         kingdoms_list.map(c => {
           const this_kingdom_castels = c.AI
           this_kingdom_castels.forEach(castel => {
+            console.log(castel.AI)
             castels.push({
               kingdom: kingdoms[c.KID],
               x: castel.AI[1],
               y: castel.AI[2],
+              id: castel.AI[3],
               name: castel.AI[10]
             })
           })
@@ -367,7 +395,7 @@ function workMessage(code, data, line){
 
       break;
     case "bls":
-      // report intermidiate
+      // report intermediate
       if(current_report_id === data.MID){
         current_report_id = -1
         current_report_lid = data.LID
@@ -377,7 +405,8 @@ function workMessage(code, data, line){
       // report data
       if(current_report_lid === data.LID && data.W){
         current_report_lid = -1
-        download(prompt("Nome formazione:") + ".gge", JSON.stringify(getTroopsFromReport(data)))
+        const report_json = { truppe: getTroopsFromReport(data), truppe_cortile: getTroopsCortileFromReport(data) };
+        download(prompt("Nome formazione:") + ".gge", JSON.stringify(report_json))
       }
       break;
     case "gbl":
@@ -416,6 +445,7 @@ function workMessage(code, data, line){
         }
       }
     case "irc":
+      // pick up offers when they arrive
       setTimeout(() => socket.send("%xt%EmpireEx_9%irc%1%{}%"), 500 + 500*Math.random())
     default:
       break;
@@ -744,6 +774,10 @@ function getTroopsFromReport(report_bld_data) {
   return troops
 }
 
+function getTroopsCortileFromReport(report_bld_data) {
+  return report_bld_data.RW
+}
+
 function download_report(report_id) {
   current_report_id = report_id
   socket.send(`%xt%EmpireEx_9%bls%1%{"MID":${report_id},"IM":0}%`)
@@ -827,7 +861,10 @@ function read_truppe(event, comma_id){
   var input = event.target;
   var reader = new FileReader();
   reader.onload = function(){
-    comma.filter(c => c.id === comma_id)[0].truppe = JSON.parse(reader.result);
+    let this_comma = comma.filter(c => c.id === comma_id)[0]
+    const all_truppe = JSON.parse(reader.result);
+    this_comma.truppe = all_truppe.truppe;
+    this_comma.truppe_cortile = all_truppe.truppe_cortile;
   };
   reader.readAsText(input.files[0]);
 }
@@ -849,15 +886,16 @@ function start_trenino(comma_id){
   let from = castels.filter(c => c.name === from_select.value)[0]
   let comandante = comma.filter(c => c.id === comma_id)[0]
   let troops = comandante.truppe
+  let assalto_al_cortile_troops = comandante.truppe_cortile
   let targets = (targets_name.value === "Tutti") ? pins : pins.filter(p => p.name === targets_name.value)
   let piume = piume_check.checked
 
-  trenino_loop(comma_id, troops, from, targets, piume, 999)
+  trenino_loop(comma_id, troops, assalto_al_cortile_troops, from, targets, piume, 999)
 }
 
-function run_trenino(comandante, troops, from, target, cavalli, info){
+function run_trenino(comandante, troops, assalto_al_cortile_troops, from, target, cavalli, info){
   return new Promise((resolve, reject)=>{
-    attack(comandante.id, troops, from.x, from.y, target.x, target.y, target.kingdom, cavalli)
+    attack(comandante.id, troops, assalto_al_cortile_troops, from.x, from.y, target.x, target.y, target.kingdom, cavalli)
     console.log(`${comandante.name} ${from.x}:${from.y} → ${target.x}:${target.y}`)
 
     const status_button = document.getElementById("via_" + comandante.id)
@@ -870,7 +908,7 @@ function run_trenino(comandante, troops, from, target, cavalli, info){
   })
 }
 
-async function trenino_loop(comma_id, troops, from, targets, piume, max_counter){
+async function trenino_loop(comma_id, troops, assalto_al_cortile_troops, from, targets, piume, max_counter){
   const comandante = comma.filter(c => c.id === comma_id)[0]
   let counter = 0
   let error_counter = 0
@@ -879,8 +917,8 @@ async function trenino_loop(comma_id, troops, from, targets, piume, max_counter)
     const target = targets[counter % targets.length]
     const info = " (" + (counter+1) + ")"
     const cavalli = piume ? "piume" : "no"
-    await run_trenino(comandante, troops, from, target, cavalli, info).then(() => {
-      // on fullfill
+    await run_trenino(comandante, troops, assalto_al_cortile_troops, from, target, cavalli, info).then(() => {
+      // on fulfill
       counter += 1
       error_counter = 0
     }, (error) => {
@@ -913,10 +951,10 @@ async function trenino_loop(comma_id, troops, from, targets, piume, max_counter)
   }
 }
 
-function attack(leader_id, troops_set, fromX, fromY, toX, toY, kingdom = 0, cavalli = "no"){
+function attack(leader_id, troops_set, assalto_al_cortile_troops, fromX, fromY, toX, toY, kingdom = 0, cavalli = "no"){
   const piume_field = cavalli === "piume" ? 1 : 0
   const cavalli_monete = cavalli === "monete" ? 1021 : -1
-  socket.send(`%xt%EmpireEx_9%cra%1%{"SX":${fromX},"SY":${fromY},"TX":${toX},"TY":${toY},"KID":${kingdom},"LID":${leader_id},"WT":0,"HBW":-1,"BPC":0,"ATT":0,"AV":0,"LP":0,"FC":0,"PTT":${piume_field},"SD":0,"ICA":0,"CD":99,"A":${JSON.stringify(troops_set)},"BKS":[]}%`)
+  socket.send(`%xt%EmpireEx_9%cra%1%{"SX":${fromX},"SY":${fromY},"TX":${toX},"TY":${toY},"KID":${kingdom},"LID":${leader_id},"WT":0,"HBW":-1,"BPC":0,"ATT":0,"AV":0,"LP":0,"FC":0,"PTT":${piume_field},"SD":0,"ICA":0,"CD":99,"A":${JSON.stringify(troops_set)},"BKS":[],"AST":[-1,-1,-1],"RW":${JSON.stringify(assalto_al_cortile_troops)},"ASCT":0}%`)
 }
 
 // --------------------------------------------------------------

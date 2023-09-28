@@ -6,7 +6,6 @@ body {
 }
 
 html.dark {
-  background: black;
   filter: invert(1) hue-rotate(180deg);
 }
 
