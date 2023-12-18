@@ -26,6 +26,13 @@ function nicerTime(minutes){
   return text
 }
 
+function nicerMoment(date){
+  let h = date.getHours().toString(); 
+  let m = date.getMinutes();
+  if (m >= 10) { m = m.toString() }else{ m = "0" + m.toString()};
+  return h + ":" + m;
+}
+
 // --------------------- UI ---------------------
 
 function pinButton(x,y,kingdom,name){
@@ -149,9 +156,13 @@ function openTab(event, tabName) {
   }
   document.getElementById(tabName).style.display = "block";
   if(event) event.currentTarget.className += " active";
+
+  localStorage.setItem("lastTab", tabName);
 }
 
-openTab({currentTarget: document.getElementById("tabMappaButton")}, "tabMappa")
+let lastTab = localStorage.getItem("lastTab");
+if (!lastTab) lastTab = "tabMappa";
+openTab({currentTarget: document.getElementById(lastTab + "Button")}, lastTab)
 
 // -------------------------- DOWNLOAD ---------------------------
 

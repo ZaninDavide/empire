@@ -29,6 +29,7 @@ const input_vicini = document.getElementById("input_vicini");
 const input_livello_ghost = document.getElementById("input_livello_ghost");
 const select_castelli = document.getElementById("castelli");
 const select_regno = document.getElementById("regno");
+const input_message = document.getElementById("input_message");
 
 const map_table = document.getElementById("map_table");
 const map_table_vuota = map_table.innerHTML;
@@ -37,6 +38,11 @@ const ally_table_vuota = ally_table.innerHTML;
 const reports_table = document.getElementById("reports_table");
 const reports_table_vuota = reports_table.innerHTML;
 const trenini_table = document.getElementById("trenini_table");
+const mercanti_table = document.getElementById("mercanti_table");
+const view_report_table = document.getElementById("view_report_table");
+const view_report_table_vuota = view_report_table.innerHTML;
+
+const chat_table = document.getElementById("chat_table");
 
 let ally1_id = 1
 let ally2_id = 2
@@ -91,7 +97,14 @@ let ally2_data = {}
 // 1078016
 // 1085006
 // 1086007
-const code = 1086007
+// 1087003
+// 1089002
+// 1090003
+// 1090007
+// 1091008
+// 1092007
+// 1093006
+const code = 1093006
 
 let myID = -1
 let myPP = -1
@@ -103,10 +116,12 @@ let reports = []
 let comma = []
 let pins = []; let pins_taken = false
 let castels = []; let castels_filled = false
+let mercanti = []
 
 let current_report_id = -1
 let current_report_lid = -1
 let last_comma = null
+let last_mercante_id = null
 
 // events
 
@@ -118,6 +133,14 @@ input_username.addEventListener("keydown", function(e) {
 input_password.addEventListener("keydown", function(e) {
     if (!e) var e = window.event
     if (e.keyCode == 13) login()
+}, false);
+
+input_message.addEventListener("keydown", function(e) {
+  if (!e) var e = window.event
+  if (e.keyCode == 13) {
+    send_chat_message(input_message.value);
+    input_message.value = "";
+  }
 }, false);
 
 // functions
@@ -135,7 +158,27 @@ function oggetto(luogo, posizione, pins, info){
    `
 }
 
-function workMapObjectData(data){
+function get_map_object_data(x, y, kingdom = 0) {
+  return new Promise((resolve, reject) => {
+    const query = x.toString() + ":" + y.toString() + ":" + kingdom.toString();
+    get_map_object_promises[query] = {};
+    get_map_object_promises[query].resolve = resolve;
+    get_map_object_promises[query].reject = reject;
+    setTimeout(() => {
+      if(
+        get_map_object_promises[query] !== undefined &&
+        get_map_object_promises[query].reject
+      ){
+        get_map_object_promises[query].reject();
+        delete get_map_object_promises[query];
+      }
+    }, 5000)
+    socket.send(`%xt%EmpireEx_9%gaa%1%{"KID":${kingdom},"AX1":${x},"AY1":${y},"AX2":${x},"AY2":${y}}%`);
+  })
+}
+
+let get_map_object_promises = {}; // "500:500:0": {resolve:..., reject: ...}
+function workMapObjectData(data, kingdom){
   let type = map_objects[data[0]]
   let x = data[1]
   let y = data[2]
@@ -143,13 +186,15 @@ function workMapObjectData(data){
   const searchX = parseInt(document.getElementById("inputx").value)
   const searchY = parseInt(document.getElementById("inputy").value)
   
-  let kingdom = 0
-  const kingdom_select = select_regno.value
-  if(kingdom_select === "impero") kingdom = 0
-  if(kingdom_select === "sabbie") kingdom = 1
-  if(kingdom_select === "ghiacci") kingdom = 2
-  if(kingdom_select === "vette") kingdom = 3
-  if(kingdom_select === "isole") kingdom = 4
+  // const kingdom_select = select_regno.value
+  // const kingdom = reverse_kingdoms[kingdom_select];
+
+  const query = x.toString() + ":" + y.toString() + ":" + kingdom.toString();
+  if(get_map_object_promises[query] !== undefined && get_map_object_promises[query].resolve){
+    get_map_object_promises[query].resolve(data);
+    delete get_map_object_promises[query];
+    return;
+  }
   
   switch (type) {
     case "Forte della Tempesta":
@@ -280,6 +325,16 @@ function workMapObjectData(data){
         }
       }
       break;
+    case "Castello dei Daymio":
+      if(false){
+        map_table.innerHTML += oggetto(
+          `Castello dei Daymio`,
+          `${x}:${y}`,
+          ``,
+          `${nicerTime(data[5]/60)}`
+        )
+      }
+      break;
     default:
       break;  
   }
@@ -312,13 +367,15 @@ function workMapPlayerData(data){
 }
 
 let keep_alive_started = false
+let help_requests_satisfied = true
+let tasse_timeout = 0
 
 function workMessage(code, data, line){
   switch(code) {
     case "gaa":
       // map information
       if(data.AI){
-        data.AI.forEach(d => workMapObjectData(d))
+        data.AI.forEach(d => workMapObjectData(d, parseInt(data.KID)))
       }
       if(data.OI){
         data.OI.forEach(d => workMapPlayerData(d))
@@ -340,6 +397,47 @@ function workMessage(code, data, line){
         reports = msg.filter(m => m.type === "Battaglia") // attacks & reports
         fill_reports_table()
       }
+      // chat
+      if(data.acl && data.acl.CM){
+        data.acl.CM.forEach(cur => {
+          const now = new Date();
+          const time = now.getTime() - 1000*cur.MA;
+          const time_date = new Date(time);
+          let msg = {
+            sender: cur.PN,
+            senderID: cur.PID,
+            message: cur.MT
+              .replace("&145;", "'")
+              .replace("e&145;", "è")
+              .replace(":))" , '<span class="emoji">😁</span>')
+              .replace(":)"  , '<span class="emoji">😀</span>')
+              .replace(":-))", '<span class="emoji">😆</span>')
+              .replace(":-)" , '<span class="emoji">😃</span>')
+              .replace(":("  , '<span class="emoji">🙁</span>')
+              .replace(";)"  , '<span class="emoji">😉</span>')
+              .replace("^_^" , '<span class="emoji">😄</span>')
+              .replace("-.-" , '<span class="emoji">😑</span>')
+              .replace("ò.Ó" , '<span class="emoji">🤨</span>')
+              .replace("o.O" , '<span class="emoji">🥴</span>')
+              .replace("x.x" , '<span class="emoji">😵</span>')
+              .replace("X.X" , '<span class="emoji">😵</span>')
+              .replace("<3" , '<span class="emoji">❤️</span>')
+              .replace("Ciaooo", '<span class="emoji">👋🏻👋🏻👋🏻</span>')
+              .replace("ciaooo", '<span class="emoji">👋🏻👋🏻👋🏻</span>')
+              .replace("ciaoo" , '<span class="emoji">👋🏻👋🏻</span>')
+              .replace("Ciaoo" , '<span class="emoji">👋🏻👋🏻</span>')
+              .replace("ciao", '<span class="emoji">👋🏻</span>')
+              .replace("Ciao", '<span class="emoji">👋🏻</span>')
+              .replace("ok"  , '<span class="emoji">👍🏼</span>'),
+            time: `${time_date.getHours().toString().padStart(2,'0')}:${time_date.getMinutes().toString().padStart(2,'0')}`,
+          }
+          chat_table.insertAdjacentHTML("beforeend", `<tr class="message">
+            <td class="sender">${msg.sender}</td>
+            <td class="text">${msg.message}</td>
+            <td class="orario" style="width:36px;">${msg.time}</td>
+          </tr>`)
+        })
+      }
       // comma & castellani
       if(data.gli){
         // const castellani = data.gli.B
@@ -353,21 +451,32 @@ function workMessage(code, data, line){
       // nomi e posizioni dei castelli
       if(data.gcl.C){
         const kingdoms_list = data.gcl.C
+        const kingdoms_sort_order = {0:0, 1:2, 2:1, 3:3, 4:4};
+        const castels_type_sort_order = {1:1, 4:2};
         kingdoms_list.map(c => {
           const this_kingdom_castels = c.AI
           this_kingdom_castels.forEach(castel => {
-            console.log(castel.AI)
             castels.push({
               kingdom: kingdoms[c.KID],
+              kingdom_id: c.KID,
+              castel_type: castel.AI[0],
               x: castel.AI[1],
               y: castel.AI[2],
               id: castel.AI[3],
               name: castel.AI[10]
             })
           })
+          castels.sort((a, b) => {
+            let so1 = kingdoms_sort_order[a.kingdom_id];
+            let so2 = kingdoms_sort_order[b.kingdom_id];
+            if (so1 !== so2) return so1 - so2;
+            so1 = castels_type_sort_order[a.castel_type] || 100;
+            so2 = castels_type_sort_order[b.castel_type] || 100;
+            return so1 - so2;
+          });
         })
         if(castels.length && comma.length && pins_taken) fill_trenini_table()
-        if(castels.length) fill_castels()
+        if(castels.length) { fill_castels(); add_row_mercanti() }
       }
     case "hgh":
       if(ally1_id === -1 || ally2_id === -1) workAllysList(data)
@@ -384,6 +493,9 @@ function workMessage(code, data, line){
       if(data.MP) myPP = data.MP
       
       socket.send("%xt%EmpireEx_9%gbl%1%{}%") // ask for pins
+      socket.send("%xt%EmpireEx_9%txi%1%{}%") // ask for tax info
+      socket.send('%xt%EmpireEx_9%aha%1%{"KID":15}%') // give help
+
 
       if(!keep_alive_started){
         keep_alive_started = true
@@ -406,7 +518,11 @@ function workMessage(code, data, line){
       if(current_report_lid === data.LID && data.W){
         current_report_lid = -1
         const report_json = { truppe: getTroopsFromReport(data), truppe_cortile: getTroopsCortileFromReport(data) };
-        download(prompt("Nome formazione:") + ".gge", JSON.stringify(report_json))
+        if (desired_action_on_reports === "download") {
+          download(prompt("Nome formazione:") + ".gge", JSON.stringify(report_json))
+        }else if (desired_action_on_reports === "view") {
+          update_report_view(report_json)
+        }
       }
       break;
     case "gbl":
@@ -421,6 +537,23 @@ function workMessage(code, data, line){
         if(castels.length && comma.length && pins_taken) fill_trenini_table()
       }
       break;
+    case "cra":
+      // your leader has started traveling
+      if(data.AAM && data.AAM.M && data.AAM.M.TT && data.AAM.UM){
+        const leader_id = data.AAM.UM.L.ID
+        // const leader_name = data.AAM.UM.L.N
+        const leader = comma.filter(c => c.id === leader_id)[0]
+        const status_button = document.getElementById("via_" + leader_id)        
+        if(leader && leader.resolve) {
+          const wait_seconds = data.AAM.M.TT - data.AAM.M.T - 2 // remove 2 seconds
+          const orario_arrivo_attacco = new Date((new Date()).getTime() + wait_seconds*1000);
+          setTimeout(() => {
+            skip_time(data.AAM.M.TA[1], data.AAM.M.TA[2], data.AAM.M.KID)
+          }, wait_seconds*1000)
+          // add time to status
+          status_button.innerText += " (" + nicerMoment(orario_arrivo_attacco) + ")"
+        }
+      }
     case "cat":
       // your leader is coming back
       if(data.A && data.A.UM && data.A.UM.L) {
@@ -430,6 +563,7 @@ function workMessage(code, data, line){
         const status_button = document.getElementById("via_" + leader_id)
         if(leader && leader.resolve) {
           const wait_seconds = data.A.M.TT - data.A.M.T + 5 + 5*Math.random() // I add 5-10 seconds
+          const orario_arrivo = new Date((new Date()).getTime() + wait_seconds*1000);
           setTimeout(() => {
             leader.resolve()
             leader.resolve = undefined
@@ -440,13 +574,157 @@ function workMessage(code, data, line){
           }, wait_seconds*1000)
           // set the status to coming back
           status_button.style.color = "green"
-          status_button.innerText = "IN RITORNO"
+          status_button.innerText = "IN RITORNO (" + nicerMoment(orario_arrivo) + ")"
           console.log(leader_name + " in ritorno.")
+        }
+      }
+    case "crm":
+      if(data.A && data.A.M && data.A.M.MID) {
+        const action_id = data.A.M.MID;
+        // merchant
+        if (last_mercante_id != null){
+          const status_button = document.getElementById("mercante_via_" + last_mercante_id);
+          const wait_seconds = data.A.M.TT - data.A.M.T;
+          const orario_arrivo = new Date((new Date()).getTime() + wait_seconds*1000);
+          status_button.style.color = "orange"          
+          status_button.innerText += " (" + orario_arrivo.getHours() + ":" + orario_arrivo.getMinutes() + ")"
+          mercanti[last_mercante_id].action_id = action_id;
+          last_mercante_id = null;
+        }else{
+          // the merchant is coming back
+          const merc = mercanti.filter(m => m.action_id == action_id)[0];
+          if(merc && merc.resolve) {
+            const status_button = document.getElementById("mercante_via_" + merc.id)
+            const wait_seconds = data.A.M.TT - data.A.M.T + 5 + 5*Math.random() // I add 5-10 seconds
+            const orario_arrivo = new Date((new Date()).getTime() + wait_seconds*1000);
+            setTimeout(() => {
+              merc.resolve()
+              merc.resolve = undefined
+              merc.reject = undefined
+            }, wait_seconds*1000)
+            // set the status to coming back
+            status_button.style.color = "green"
+            status_button.innerText = "IN RITORNO (" + orario_arrivo.getHours() + ":" + orario_arrivo.getMinutes() + ")"
+            console.log("Mercante " + merc.id + " in ritorno.")
+          }
+        }
+      }
+    case "ssu":
+      // spy info arrived
+      if(data && data.S) {
+        const left = data.S[0];
+        const mid = data.S[1];
+        const right = data.S[2];
+        const court = data.S[3];
+        if (
+          get_spy_info_list[data.AI.X + ":" + data.AI.Y] !== undefined &&
+          get_spy_info_list[data.AI.X + ":" + data.AI.Y].resolve !== undefined
+        ) {
+          get_spy_info_list[data.AI.X + ":" + data.AI.Y].resolve({left, mid, right, court});
+          delete get_spy_info_list[data.AI.X + ":" + data.AI.Y];
+        }
+      }
+    case "csm":
+      if (data.A && data.A.M.SA) {
+        // la spia è arrivata a destinazione,
+        // questo non significa che la spiata sia andata bene
+        if (
+          send_spy_list[data.A.M.SA[1] + ":" + data.A.M.SA[2]] !== undefined &&
+          send_spy_list[data.A.M.SA[1] + ":" + data.A.M.SA[2]].resolve !== undefined
+        ) {
+          send_spy_list[data.A.M.SA[1] + ":" + data.A.M.SA[2]].resolve({travel_time: data.A.M.TT || 0});
+          delete send_spy_list[data.A.M.SA[1] + ":" + data.A.M.SA[2]];
         }
       }
     case "irc":
       // pick up offers when they arrive
       setTimeout(() => socket.send("%xt%EmpireEx_9%irc%1%{}%"), 500 + 500*Math.random())
+    case "ahh":
+      // help ally
+      if (data.AC === 0) {
+        help_requests_satisfied = false;
+        setTimeout(() => {
+          if (!help_requests_satisfied) {
+            socket.send('%xt%EmpireEx_9%aha%1%{"KID":15}%');
+            help_requests_satisfied = true;
+          }
+        }, 10*1000 + 1546*Math.random())
+      }
+    case "txi":
+      if(data.TX) {
+        if(data.TX.TT === -1) {
+          // tasse da richiedere
+          // RICHIESTA TASSE 10min
+          socket.send('%xt%EmpireEx_9%txc%1%{"TR":29}%')
+          socket.send('%xt%EmpireEx_9%txs%1%{"TT":0,"TX":3}%')
+          // RICHIESTA TASSE 30min; TT = 1
+          // RICHIESTA TASSE 1h 30min; TT = 2
+          // RICHIESTA TASSE 3h; TT = 3
+          // RICHIESTA TASSE 6h; TT = 4
+        }else if (data.TX.TT === 0) {
+          if(data.TX.RT < 0) {
+            // tasse da ritirare
+            socket.send('%xt%EmpireEx_9%txc%1%{"TR":29}%')
+            socket.send('%xt%EmpireEx_9%txs%1%{"TT":0,"TX":3}%')
+          }else{
+            // tasse in attesa
+            if (tasse_timeout) clearTimeout(tasse_timeout);
+            tasse_timeout = setTimeout(() => {
+              socket.send('%xt%EmpireEx_9%txc%1%{"TR":29}%')
+              socket.send('%xt%EmpireEx_9%txs%1%{"TT":0,"TX":3}%')
+            }, data.TX.RT*1001);
+          }
+        }
+      }
+    case "txs":
+      if(data.txi && data.txi.TX && data.txi.TX.TT & data.txi.TX.TT === -1) {
+        // tasse da richiedere
+        socket.send('%xt%EmpireEx_9%txc%1%{"TR":29}%')
+        socket.send('%xt%EmpireEx_9%txs%1%{"TT":0,"TX":3}%')
+      }
+    case "acm":
+      // chat message arrived
+      if(data.CM){
+        const now = new Date();
+        const time = now.getTime() - 1000*data.CM.MA;
+        const time_date = new Date(time);
+        let msg = {
+          sender: data.CM.PN,
+          senderID: data.CM.PID,
+          message: data.CM.MT
+            .replace("&145;", "'")
+            .replace("e&145;", "è")
+            .replace(":))" , '<span class="emoji">😁</span>')
+            .replace(":)"  , '<span class="emoji">😀</span>')
+            .replace(":-))", '<span class="emoji">😆</span>')
+            .replace(":-)" , '<span class="emoji">😃</span>')
+            .replace(":("  , '<span class="emoji">🙁</span>')
+            .replace(";)"  , '<span class="emoji">😉</span>')
+            .replace("^_^" , '<span class="emoji">😄</span>')
+            .replace("-.-" , '<span class="emoji">😑</span>')
+            .replace("ò.Ó" , '<span class="emoji">🤨</span>')
+            .replace("o.O" , '<span class="emoji">🥴</span>')
+            .replace("x.x" , '<span class="emoji">😵</span>')
+            .replace("X.X" , '<span class="emoji">😵</span>')
+            .replace("<3" , '<span class="emoji">❤️</span>')
+            .replace("Ciaooo", '<span class="emoji">👋🏻👋🏻👋🏻</span>')
+            .replace("ciaooo", '<span class="emoji">👋🏻👋🏻👋🏻</span>')
+            .replace("ciaoo" , '<span class="emoji">👋🏻👋🏻</span>')
+            .replace("Ciaoo" , '<span class="emoji">👋🏻👋🏻</span>')
+            .replace("ciao", '<span class="emoji">👋🏻</span>')
+            .replace("Ciao", '<span class="emoji">👋🏻</span>')
+            .replace("ok"  , '<span class="emoji">👍🏼</span>'),
+          time: `${time_date.getHours().toString().padStart(2,'0')}:${time_date.getMinutes().toString().padStart(2,'0')}`,
+        }
+        if (data.CM.MT.toLowerCase().includes(input_username.value.toLowerCase()) && msg.sender !== input_username.value){
+          notify(msg.sender + " ti sta cercando", data.CM.MT)
+        }
+        chat_table.insertAdjacentHTML("beforeend", `<tr class="message">
+          <td class="sender">${msg.sender}</td>
+          <td class="text">${msg.message}</td>
+          <td class="orario" style="width:36px;">${msg.time}</td>
+        </tr>`)
+      }
     default:
       break;
   }
@@ -455,9 +733,29 @@ function workMessage(code, data, line){
 function workError(code, error_number, line){
   switch(code){
     case "cra":
+      console.error("Error " + error_number + ": " + errors[error_number]);
       // un attacco non è riuscito a partire
       last_comma.reject(error_number)
       break;
+    case "ssu":
+      // I do not show any error since this may be normal
+      // console.error("Error " + error_number + ": " + errors[error_number]);
+      // could not read espionage result
+      // non possiamo sapere quale spionaggio sia stato rifiutato quindi li rigettiamo tutti
+      // nella maggior parte dei casi la lista conterrà solo uno spionaggio
+      Object.keys(get_spy_info_list).map(key => { if(get_spy_info_list[key].reject !== undefined){
+        get_spy_info_list[key].reject(); 
+      }})
+      get_spy_info_list = {}
+      break;
+    case "csm":
+      console.error("Error " + error_number + ": " + errors[error_number]);
+      // non possiamo sapere quale spionaggio sia stato rifiutato quindi li rigettiamo tutti
+      // nella maggior parte dei casi la lista conterrà solo uno spionaggio
+      Object.keys(send_spy_list).map(key => { if (send_spy_list[key].reject !== undefined){
+        send_spy_list[key].reject();
+      }})
+      send_spy_list = undefined;
     default:
       break;
   }
@@ -747,7 +1045,7 @@ function giocatore(player, def, att){
    `
 }
 
-// --------------------------------------------------------------
+// ---------------------- REPORTS ---------------------------
 
 function getTroopsFromReport(report_bld_data) {
   if(!report_bld_data || !report_bld_data.W) return false
@@ -778,12 +1076,19 @@ function getTroopsCortileFromReport(report_bld_data) {
   return report_bld_data.RW
 }
 
+let desired_action_on_reports = "view"; // "view" or "download"
 function download_report(report_id) {
+  desired_action_on_reports = "download"
+  current_report_id = report_id
+  socket.send(`%xt%EmpireEx_9%bls%1%{"MID":${report_id},"IM":0}%`)
+}
+function view_report(report_id) {
+  desired_action_on_reports = "view"
   current_report_id = report_id
   socket.send(`%xt%EmpireEx_9%bls%1%{"MID":${report_id},"IM":0}%`)
 }
 
-function report(report){
+function report_to_html(report){
   let splitted = report.info.split("+")
   let title = report.from || splitted.pop()
   if(enemy_types[title]) title = enemy_types[title]
@@ -792,16 +1097,102 @@ function report(report){
           <tr>
             <td>${title}</td>
             <td>${info}</td>
-            <td><button class="material-icons" onclick="download_report(${report.id})">download</button></td>
+            <td>
+              <button class="material-icons" onclick="download_report(${report.id})">download</button>
+              <button class="material-icons" onclick="view_report(${report.id})">open_in_new</button>
+            </td>
           </tr>
    `
 }
 
 function fill_reports_table() {
   reports.forEach(r => {
-    reports_table.innerHTML += report(r) // TODO
+    reports_table.innerHTML += report_to_html(r) // TODO
   })
 }
+
+function get_troop_name(id) {
+  let english_name = items_list.units.filter(truppa => truppa.wodID == id)[0].type;
+  let italian_name = translations[(english_name + "_name").toLowerCase()]; // all lowercase
+  if (italian_name === undefined){
+    let query = (english_name + "_name").substring(0, 1).toLowerCase() + (english_name + "_name").substring(1); // make first letter lowercase
+    italian_name = translations[query];
+  }
+  if (italian_name === undefined){
+    italian_name = translations[(english_name + "_name")]; // all lowercase
+  }
+  return italian_name;
+}
+function get_tool_name(id) {
+  let english_name = items_list.units.filter(strumento => strumento.wodID == id)[0].type;
+  let italian_name = translations[(english_name + "_name").toLowerCase()]; // all lowercase
+  if (italian_name === undefined){
+    let query = (english_name + "_name").substring(0, 1).toLowerCase() + (english_name + "_name").substring(1); // make first letter lowercase
+    italian_name = translations[query];
+  }
+  if (italian_name === undefined){
+    italian_name = translations[(english_name + "_name")]; // all lowercase
+  }
+  return italian_name;
+}
+function get_troop_info(id) {
+  let troop = items_list.units.filter(truppa => truppa.wodID == id)[0];
+  return {
+    english_name: troop.type,
+    italian_name: get_troop_name(id),
+    melee_attack: parseInt(troop.meleeAttack) || 0,
+    range_attack: parseInt(troop.rangeAttack) || 0,
+    melee_defence: parseInt(troop.meleeDefence) || 0,
+    range_defence: parseInt(troop.rangeDefence) || 0,
+    speed: parseInt(troop.speed),    
+    fameAsDef: parseFloat(troop.fameAsDef), // gloria nella morte in difesa
+    fameAsOff: parseFloat(troop.fameAsOff), // gloria nella morte in attacco
+    food: parseInt(troop.foodSupply),
+  }
+}
+
+function update_report_view(report_json) {
+  let html = view_report_table_vuota;
+
+  report_json.truppe.forEach((ondata, id) => {
+    const left_troops =  ondata.L.U.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_troop_name(t[0]) );
+    const left_tools =   ondata.L.T.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_tool_name(t[0]) );
+    const mid_troops =   ondata.M.U.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_troop_name(t[0]) );
+    const mid_tools =    ondata.M.T.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_tool_name(t[0]) );
+    const right_troops = ondata.R.U.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_troop_name(t[0]) );
+    const right_tools =  ondata.R.T.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_tool_name(t[0]) );
+    html += `<tr>
+      <td>${id+1}</td>
+      <td>${left_troops.join("<br/>")}</td>
+      <td>${left_tools.join("<br/>")}</td>
+      <td>${mid_troops.join("<br/>")}</td>
+      <td>${mid_tools.join("<br/>")}</td>
+      <td>${right_troops.join("<br/>")}</td>
+      <td>${right_tools.join("<br/>")}</td>
+    </tr>`;
+  })
+
+  if(report_json.truppe_cortile.filter(t => t[0] !== -1).length > 0){
+    html += `<tr>
+      <td></td>
+      <td colspan="6" style="text-align: center">${report_json.truppe_cortile.filter(t => t[0] !== -1).map(t => t[1] + " × " + get_troop_name(t[0])).join("<br/>")}</td>
+    </tr>`;
+  }
+
+  view_report_table.innerHTML = html;
+}
+
+function read_rapporto(event){
+  var input = event.target;
+  var reader = new FileReader();
+  reader.onload = function(){
+    const all_truppe = JSON.parse(reader.result);
+    update_report_view(all_truppe);
+  };
+  reader.readAsText(input.files[0]);
+}
+
+// -------------------------------------------------------------
 
 function fill_castels(){
   castels_filled = true
@@ -842,6 +1233,7 @@ function fill_trenini_table(){
     return `<select id="targets_${c.id}">${groups.map(group => `<option value="${group.name}">${group.name} (${group.count})</option>`)}</select>`
   }
   let check_piume = c => `<input type="checkbox" id="piume_${c.id}" /><label id="piume_label_${c.id}" for="piume_${c.id}">Piume</label>`
+  let check_smart = c => `<input type="checkbox" id="smart_${c.id}" /><label id="smart_label_${c.id}" for="smart_${c.id}">Smart</label>`
   comma.forEach(c => {
     let treno = `
     <tr id="comma_${c.id}">
@@ -850,10 +1242,11 @@ function fill_trenini_table(){
       <td>${select_from(c)}</td>
       <td>${select_targets(c)}</td>
       <td>${check_piume(c)}</td>
+      <td>${check_smart(c)}</td>
       <td><button id="via_${c.id}" onclick="start_trenino(${c.id})">AVVIA</button></td>
     </tr>
 `
-    trenini_table.innerHTML += treno
+    trenini_table.insertAdjacentHTML('beforeend', treno);
   })
 }
 
@@ -875,12 +1268,14 @@ function start_trenino(comma_id){
   const truppe_input = document.getElementById("truppe_" + comma_id)
   const targets_name = document.getElementById("targets_" + comma_id)
   const piume_check = document.getElementById("piume_" + comma_id)
+  const smart_check = document.getElementById("smart_" + comma_id)
 
   start_button.disabled = true
   from_select.disabled = true
   truppe_input.disabled = true
   targets_name.disabled = true
   piume_check.disabled = true
+  smart_check.disabled = true
   start_button.style.color = "green"
 
   let from = castels.filter(c => c.name === from_select.value)[0]
@@ -889,14 +1284,15 @@ function start_trenino(comma_id){
   let assalto_al_cortile_troops = comandante.truppe_cortile
   let targets = (targets_name.value === "Tutti") ? pins : pins.filter(p => p.name === targets_name.value)
   let piume = piume_check.checked
+  let smart = smart_check.checked
 
-  trenino_loop(comma_id, troops, assalto_al_cortile_troops, from, targets, piume, 999)
+  trenino_loop(comma_id, troops, assalto_al_cortile_troops, from, targets, piume, smart, 999)
 }
 
 function run_trenino(comandante, troops, assalto_al_cortile_troops, from, target, cavalli, info){
   return new Promise((resolve, reject)=>{
     attack(comandante.id, troops, assalto_al_cortile_troops, from.x, from.y, target.x, target.y, target.kingdom, cavalli)
-    console.log(`${comandante.name} ${from.x}:${from.y} → ${target.x}:${target.y}`)
+    console.log(`${comandante.name} ${from.x}:${from.y} → ${target.x}:${target.y} (${from.kingdom})`)
 
     const status_button = document.getElementById("via_" + comandante.id)
     status_button.style.color = "orange"
@@ -908,16 +1304,170 @@ function run_trenino(comandante, troops, assalto_al_cortile_troops, from, target
   })
 }
 
-async function trenino_loop(comma_id, troops, assalto_al_cortile_troops, from, targets, piume, max_counter){
+async function skip_time(x, y, kingdom = 0){
+  // console.log(x, y, kingdom);
+  const data = await get_map_object_data(x, y, kingdom);
+  let total_time_to_skip = data[5] / 60; // minutes
+  let time_to_skip = total_time_to_skip; // minutes
+
+  if (time_to_skip > 15*60) {
+    console.error("Il tempo d'attesa era superiore a 15h quindi non è stato utilizzato alcun salta-tempo.");
+    return;
+  }
+
+  while (time_to_skip > 0) {
+    let cur_skip = time_skips["1min"];
+    let cur_skip_minutes = 1;
+    if      (time_to_skip > 24*60) { cur_skip = time_skips["24h"];   cur_skip_minutes = 24*60; }
+    else if (time_to_skip >  5*60) { cur_skip = time_skips["5h"];    cur_skip_minutes =  5*60; }
+    else if (time_to_skip >  1*60) { cur_skip = time_skips["1h"];    cur_skip_minutes =  1*60; }
+    else if (time_to_skip >    30) { cur_skip = time_skips["30min"]; cur_skip_minutes =    30; }
+    else if (time_to_skip >    10) { cur_skip = time_skips["10min"]; cur_skip_minutes =    10; }
+    else if (time_to_skip >     5) { cur_skip = time_skips["5min"];  cur_skip_minutes =     5; }
+    socket.send(`%xt%EmpireEx_9%msd%1%{"X":${x},"Y":${y},"MID":-1,"NID":-1,"MST":${cur_skip},"KID":"${kingdom}"}%`);
+    time_to_skip -= cur_skip_minutes;
+  }
+
+  if(total_time_to_skip > 0) { console.log("Tempo d'attesa saltato per " + x + ":" + y + ":" + kingdom + " pari a " + nicerTime(total_time_to_skip)); }
+}
+
+async function get_smart_troops(troops, assalto_troops, castel_from, target) {
+  // calcolo la capacità di difesa dell'avversario 
+  let enemy_info = await send_and_get_spy_info(castel_from, target);
+  let enemy_defence = {
+    left:  {range: 0, melee: 0, count: 0},
+    right: {range: 0, melee: 0, count: 0},
+    mid:   {range: 0, melee: 0, count: 0},
+    court: {range: 0, melee: 0, count: 0},
+  }
+  enemy_info.left.forEach(unit_and_count => {
+    let info = get_troop_info(unit_and_count[0]);
+    enemy_defence.left.range += unit_and_count[1] * info.range_defence;
+    enemy_defence.left.melee += unit_and_count[1] * info.melee_defence;
+    enemy_defence.left.count += unit_and_count[1];
+  })
+  enemy_info.mid.forEach(unit_and_count => {
+    let info = get_troop_info(unit_and_count[0]);
+    enemy_defence.mid.range += unit_and_count[1] * info.range_defence;
+    enemy_defence.mid.melee += unit_and_count[1] * info.melee_defence;
+    enemy_defence.mid.count += unit_and_count[1];
+  })
+  enemy_info.right.forEach(unit_and_count => {
+    let info = get_troop_info(unit_and_count[0]);
+    enemy_defence.right.range += unit_and_count[1] * info.range_defence;
+    enemy_defence.right.melee += unit_and_count[1] * info.melee_defence;
+    enemy_defence.right.count += unit_and_count[1];
+  })
+  enemy_info.court.forEach(unit_and_count => {
+    let info = get_troop_info(unit_and_count[0]);
+    enemy_defence.court.range += unit_and_count[1] * info.range_defence;
+    enemy_defence.court.melee += unit_and_count[1] * info.melee_defence;
+    enemy_defence.court.count += unit_and_count[1];
+  })
+
+  // TODO: implementare la strategia EMPTY nel caso non ci fossero truppe su quel fianco
+  // se non ci sono truppe avrebbe senso ricadere sulla strategia del cortile
+  // se il cortile è vuoto lascerei le cose come sono 
+  // scelgo di usare il tipo di truppe opposto a quello che il difensore usa maggiormente
+  let my_strategy = {
+    L:  enemy_defence.left.melee > enemy_defence.left.range ? "range": "melee",
+    R: enemy_defence.right.melee > enemy_defence.right.range ? "range": "melee",
+    M:   enemy_defence.mid.melee > enemy_defence.mid.range ? "range": "melee",
+    C: enemy_defence.court.melee > enemy_defence.court.range ? "range": "melee",
+  }
+
+  // massimizzo il tipo di truppe che ho scelto di usare per ogni lato
+  // modifico solamente i fronti dove c'è esattamente un tipo di truppa 
+  // da mischia e un tipo di truppa da difesa. Preservo il numero totale 
+  // di truppe.
+  const fianco_to_name = {L: "left", M: "mid", R: "right", C:"court"};
+  let new_troops = {
+    troops: troops.map((ondata, n_ondata) => {
+      let nuova_ondata = {L: {T:ondata.L.T, U: []}, M: {T:ondata.M.T, U: []}, R:{T:ondata.R.T, U: []}};
+      let current_strategy =                    { L: my_strategy.L, M: my_strategy.M, R: my_strategy.R, C: my_strategy.C };
+      // il centro passa sempre in massimo due turni quindi dalla terza ondata in poi uso la strategia del cortile
+      if (n_ondata + 1 >= 3) current_strategy = { L: my_strategy.L, M: my_strategy.C, R: my_strategy.R, C: my_strategy.C };
+      // if (n_ondata + 1 >= 4) current_strategy = { L: my_strategy.C, M: my_strategy.C, R: my_strategy.C, C: my_strategy.C };
+      ["L", "M", "R"].forEach(fianco => {
+        if (ondata[fianco].U.filter(t => t[0] !== -1).length === 2) {
+          const first_troop_info = get_troop_info(ondata[fianco].U[0][0]);
+          const second_troop_info = get_troop_info(ondata[fianco].U[1][0]);
+          const total_troops_count= ondata[fianco].U[0][1] + ondata[fianco].U[1][1];
+
+          // if the enemy has less than 10% the troops you have we give precedence to the court
+          if (enemy_defence[fianco_to_name[fianco]].count < 0.1 * total_troops_count) current_strategy[fianco] = current_strategy.C;
+
+          if (first_troop_info.range_attack > 0 && second_troop_info.range_attack === 0) {
+            // 1=range, 2=melee
+            if( current_strategy[fianco] === "range" ){
+              nuova_ondata[fianco].U = [[ondata[fianco].U[0][0], total_troops_count - 1], [ondata[fianco].U[1][0], 1]];
+            }else{
+              nuova_ondata[fianco].U = [[ondata[fianco].U[0][0], 1], [ondata[fianco].U[1][0], total_troops_count - 1]];
+            }
+          }else if (first_troop_info.range_attack === 0 && second_troop_info.range_attack > 0)  {
+            // 1=melee, 2=range
+            if( current_strategy[fianco] === "range" ){
+              nuova_ondata[fianco].U = [[ondata[fianco].U[0][0], 1], [ondata[fianco].U[1][0], total_troops_count - 1]];
+            }else{
+              nuova_ondata[fianco].U = [[ondata[fianco].U[0][0], total_troops_count - 1], [ondata[fianco].U[1][0], 1]];
+            }
+          }else{ nuova_ondata[fianco].U = ondata[fianco].U; }
+          if (ondata[fianco].U.length > 2) {
+            // ci sono degli spazi vuoti nel set
+            let repeated = new Array(ondata[fianco].U.length - 2).fill([-1, 0]);
+            nuova_ondata[fianco].U = [...nuova_ondata[fianco].U, ...repeated];
+          }
+        }else{ nuova_ondata[fianco].U = ondata[fianco].U;}
+
+      })
+      return nuova_ondata;
+    }), 
+    assalto_troops: (() => {
+      let new_assalto_troops = [];
+      if (assalto_troops.length === 2) {
+        const first_troop_info = get_troop_info(assalto_troops[0][0]);
+        const second_troop_info = get_troop_info(assalto_troops[1][0]);
+        const total_troops_count= assalto_troops[0][1] + assalto_troops[1][1];
+        if (first_troop_info.range_attack > 0 && second_troop_info.range_attack === 0) {
+          // 1=range, 2=melee
+          if( my_strategy.C === "range" ){
+            new_assalto_troops = [[assalto_troops[0][0], total_troops_count - 1], [assalto_troops[1][0], 1]];
+          }else{
+            new_assalto_troops = [[assalto_troops[0][0], 1], [assalto_troops[1][0], total_troops_count - 1]];
+          }
+        }else if (first_troop_info.range_attack === 0 && second_troop_info.range_attack > 0)  {
+          // 1=melee, 2=range
+          if( my_strategy.C === "range" ){
+            new_assalto_troops = [[assalto_troops[0][0], 1], [assalto_troops[1][0], total_troops_count - 1]];
+          }else{
+            new_assalto_troops = [[assalto_troops[0][0], total_troops_count - 1], [assalto_troops[1][0], 1]];
+          }
+        }else{ new_assalto_troops = assalto_troops; }
+      }else{ new_assalto_troops = assalto_troops; }
+      return new_assalto_troops;
+    })()
+  };
+  return new_troops;
+}
+
+async function trenino_loop(comma_id, troops, assalto_al_cortile_troops, from, targets, piume, smart, max_counter){
   const comandante = comma.filter(c => c.id === comma_id)[0]
   let counter = 0
   let error_counter = 0
   // limit the number of attacks and consecutive errors allowed
   while(counter < max_counter && error_counter < targets.length){
     const target = targets[counter % targets.length]
-    const info = " (" + (counter+1) + ")"
-    const cavalli = piume ? "piume" : "no"
-    await run_trenino(comandante, troops, assalto_al_cortile_troops, from, target, cavalli, info).then(() => {
+    const info = " " + (counter+1).toString();
+    const cavalli = piume ? "piume" : "no";
+    let this_troops = JSON.parse(JSON.stringify(troops));
+    let this_assalto_troops = JSON.parse(JSON.stringify(assalto_al_cortile_troops));
+    if (smart) {
+      let new_troops = await get_smart_troops(this_troops, this_assalto_troops, from, target);
+      this_troops = new_troops.troops;
+      this_assalto_troops = new_troops.assalto_troops;
+    }
+    await skip_time(target.x, target.y, target.kingdom);
+    await run_trenino(comandante, this_troops, this_assalto_troops, from, target, cavalli, info).then(() => {
       // on fulfill
       counter += 1
       error_counter = 0
@@ -957,7 +1507,179 @@ function attack(leader_id, troops_set, assalto_al_cortile_troops, fromX, fromY, 
   socket.send(`%xt%EmpireEx_9%cra%1%{"SX":${fromX},"SY":${fromY},"TX":${toX},"TY":${toY},"KID":${kingdom},"LID":${leader_id},"WT":0,"HBW":-1,"BPC":0,"ATT":0,"AV":0,"LP":0,"FC":0,"PTT":${piume_field},"SD":0,"ICA":0,"CD":99,"A":${JSON.stringify(troops_set)},"BKS":[],"AST":[-1,-1,-1],"RW":${JSON.stringify(assalto_al_cortile_troops)},"ASCT":0}%`)
 }
 
-// --------------------------------------------------------------
+
+// ----------------------------- TRENINI DI RISORSE ---------------------------------
+function add_row_mercanti() {
+  const mer_id = mercanti.length;
+  mercanti[mer_id] = {id: mer_id};
+  const merc = mercanti[mer_id];
+  let select_from = `<select id="mercante_from_${merc.id}">${castels.map(c => `<option value="${c.name}">${c.name}</option>`)}</select>`
+  let select_to = `<select id="mercante_to_${merc.id}">${castels.map(c => `<option value="${c.name}">${c.name}</option>`)}</select>`
+  let check_piume = `<input type="checkbox" id="mercante_piume_${merc.id}" /><label id="mercanti_piume_label_${merc.id}" for="mercante_piume_${merc.id}">Piume</label>`
+  let risorse = `
+    <div style="display: inline-block">Legna: <input type="number" id="mercante_legna_${merc.id}" value="0" min="0"/></div>
+    <div style="display: inline-block">Pietra: <input type="number" id="mercante_pietra_${merc.id}" value="0" min="0"/></div>
+    <div style="display: inline-block">Cibo: <input type="number" id="mercante_cibo_${merc.id}" value="0" min="0"/></div>
+    <hl/>
+    <br/>
+    <div style="display: inline-block">Carbone: <input type="number" id="mercante_carbone_${merc.id}" value="0" min="0"/></div>
+    <div style="display: inline-block">Olio: <input type="number" id="mercante_olio_${merc.id}" value="0" min="0"/></div>
+    <div style="display: inline-block">Vetro: <input type="number" id="mercante_vetro_${merc.id}" value="0" min="0"/></div>
+    <div style="display: inline-block">Ferro: <input type="number" id="mercante_ferro_${merc.id}" value="0" min="0"/></div>
+  `;
+  
+  mercanti_table.insertAdjacentHTML('beforeend', `
+  <tr id="mercante_${merc.id}">
+    <td>${select_from}</td>
+    <td>${select_to}</td>
+    <td>${risorse}</td>
+    <td>${check_piume}</td>
+    <td><button id="mercante_via_${merc.id}" onclick="start_trenino_mercanti(${merc.id})">AVVIA</button></td>
+  </tr>
+  `);
+}
+
+function start_trenino_mercanti(mercante_id){
+  const start_button = document.getElementById("mercante_via_" + mercante_id)
+  const from_select = document.getElementById("mercante_from_" + mercante_id)
+  const to_select = document.getElementById("mercante_to_" + mercante_id)
+  const piume_check = document.getElementById("mercante_piume_" + mercante_id)
+  const input_legna = document.getElementById("mercante_legna_" + mercante_id)
+  const input_pietra = document.getElementById("mercante_pietra_" + mercante_id)
+  const input_cibo = document.getElementById("mercante_cibo_" + mercante_id)
+  const input_carbone = document.getElementById("mercante_carbone_" + mercante_id)
+  const input_olio = document.getElementById("mercante_olio_" + mercante_id)
+  const input_ferro = document.getElementById("mercante_ferro_" + mercante_id)
+  const input_vetro = document.getElementById("mercante_vetro_" + mercante_id)
+
+  start_button.disabled = true
+  from_select.disabled = true
+  to_select.disabled = true
+  piume_check.disabled = true
+  input_legna.disabled = true
+  input_pietra.disabled = true
+  input_cibo.disabled = true
+  input_carbone.disabled = true
+  input_olio.disabled = true
+  input_ferro.disabled = true
+  input_vetro.disabled = true
+  start_button.style.color = "green"
+
+  let castel_from = castels.filter(c => c.name === from_select.value)[0]
+  let castel_to = castels.filter(c => c.name === to_select.value)[0]
+  let piume = piume_check.checked && true
+
+  let risorse = []
+  if (input_legna.value > 0 || input_pietra.value > 0 || input_cibo.value > 0) {
+    if(input_legna.value > 0) risorse.push(["W", input_legna.value])
+    if(input_pietra.value > 0) risorse.push(["S", input_pietra.value])
+    if(input_cibo.value > 0) risorse.push(["F", input_cibo.value])
+    input_carbone.value = 0;
+    input_olio.value = 0;
+    input_ferro.value = 0;
+    input_vetro.value = 0;
+  }else{
+    if(input_carbone.value > 0) risorse.push(["C", input_carbone.value])
+    if(input_olio.value > 0) risorse.push(["O", input_olio.value])
+    if(input_vetro.value > 0) risorse.push(["G", input_vetro.value])
+    if(input_ferro.value > 0) risorse.push(["I", input_ferro.value])
+  }
+
+  mercante_loop(mercante_id, castel_from, risorse, castel_to.x, castel_to.y, piume, 999)
+  add_row_mercanti()
+}
+
+function run_trenino_mercante(mercante_id, castel_from, resources, toX, toY, piume = false, info){
+  return new Promise((resolve, reject)=>{
+    send_mercante(castel_from, resources, toX, toY, piume)
+    console.log(`Mercante ${mercante_id} ${castel_from.name} → ${toX}:${toY}`)
+
+    const status_button = document.getElementById("mercante_via_" + mercante_id)
+    status_button.style.color = "orange"
+    status_button.innerText = "IN VIAGGIO" + info
+
+    mercanti[mercante_id].resolve = resolve
+    mercanti[mercante_id].reject = reject
+    last_mercante_id = mercante_id
+  })
+}
+
+async function mercante_loop(mercante_id, castel_from, resources, toX, toY, piume, max_counter){
+  let counter = 0
+  let found_error = false;
+  // limit the number of attacks and consecutive errors allowed
+  while(counter < max_counter && !found_error){
+    await run_trenino_mercante(mercante_id, castel_from, resources, toX, toY, piume, ` ${counter}`).then(() => {
+      // on fulfill
+      counter += 1
+      error_counter = 0
+    }, (error) => {
+      // on reject
+      console.error("Merchant " + mercante_id + " error " + error + ": " + errors[error])
+      const status_button = document.getElementById("mercante_via_" + mercante_id)
+      status_button.style.color = "red"
+      status_button.innerText = "Errore: " + errors[error]
+      found_error = true;
+    })
+  }
+
+  if(counter >= max_counter){
+    console.log("Mercante " + mercante_id + " ha completato il ciclo di viaggi.")
+    notify(
+      "Mercante " + mercante_id + " ha finito",
+      "Mercante " + mercante_id + " ha completato il ciclo di viaggi."
+    )
+  }
+}
+
+function send_mercante(castel_from, resources, toX, toY, piume = false){
+  const piume_field = piume ? 1 : 0
+  socket.send(`%xt%EmpireEx_9%crm%1%{"KID":${reverse_kingdoms[castel_from.kingdom]},"SID":${castel_from.id},"TX":${toX},"TY":${toY},"HBW":-1,"PTT":${piume_field},"SD":0,"G":${JSON.stringify(resources)}}%`)
+}
+
+// ----------------------------- SPIE ---------------------------------
+let get_spy_info_list = {};
+async function get_spy_info(kingdom_number, X, Y) {
+  socket.send(`%xt%EmpireEx_9%ssi%1%{"TX":${X},"TY":${Y},"KID":${kingdom_number}}%`)
+  socket.send(`%xt%EmpireEx_9%gaa%1%{"KID":${kingdom_number},"AX1":${X-5},"AY1":${Y-5},"AX2":${X+5},"AY2":${Y+5}}%`)
+  socket.send(`%xt%EmpireEx_9%ssu%1%{"TX":${X},"TY":${Y}}%`)
+  return new Promise((resolve, reject) => {
+    get_spy_info_list[X + ":" + Y] = {resolve: resolve, reject: reject};
+  });
+}
+
+let send_spy_list = {};
+async function send_spionaggio(castel_from, toX, toY, numero_spie, percentage = 100, piume = false){
+  const piume_field = piume ? 1 : 0
+  socket.send(`%xt%EmpireEx_9%csm%1%{"SID":${castel_from.id},"TX":${toX},"TY":${toY},"SC":${numero_spie},"ST":0,"SE":${percentage},"HBW":-1,"KID":${reverse_kingdoms[castel_from.kingdom]},"PTT":${piume_field},"SD":0}%`)
+  return new Promise((resolve, reject) => {
+    send_spy_list[toX.toString() + ":" + toY.toString()] = {resolve: resolve, reject: reject};
+  });
+}
+
+const delay = ms => new Promise(res => setTimeout(res, ms));
+async function send_and_get_spy_info(castel_from, target) {
+  const max_counter = 10;
+  let i = 0;
+  let spia = {travel_time: 0};
+  while (i < max_counter) {
+    try {
+      await delay(2 * spia.travel_time * 1000);
+      let info = await get_spy_info(target.kingdom, target.x, target.y);
+      return info;
+    } catch (error) {
+      const numero_spie = 15; // TODO
+      try {
+        spia = await send_spionaggio(castel_from, target.x, target.y, numero_spie, 100, true);
+      } catch (error_send) {}
+    } 
+    i += 1;
+  }
+  console.error("Tentativo di spiare " + target.x + ":" + target.y + " fallito dopo " + max_counter + " tentativi.");
+  return null;
+}
+
+// ---------------------- PINS ----------------------------------
 
 function pinForMe(x, y, kingdom = 0, name = "Posizione"){
   socket.send(`%xt%EmpireEx_9%bad%1%{"K":${kingdom},"X":${x},"Y":${y},"TY":0,"TI":-1,"IM":0,"N":"${name}","M":[]}%`)
@@ -970,6 +1692,17 @@ function pinForAlly(x, y, kingdom = 0, name = "Posizione", minutes = 60){
 
 // --------------------------------------------------------------
 
+// ---------------------- CHAT ----------------------------------
+function send_chat_message(text){
+  text = text.replace(/'/g, "&145;")
+  socket.send(`%xt%EmpireEx_9%acm%1%{"M":"${text}"}%`)
+}
+
+function privateMessage(player_to, title, text){
+  // RN = receiver name,  MH = message header
+  socket.send(`%xt%EmpireEx_9%sms%1%{"RN":"${player_to}","MH":"${title}","TXT":"${text}"}%`)
+}
+
 const kingdoms = {
   0: "impero",
   1: "sabbie",
@@ -978,19 +1711,30 @@ const kingdoms = {
   4: "isole",
 }
 
+const reverse_kingdoms = {
+  "impero": 0,
+  "sabbie": 1,
+  "ghiacci": 2,
+  "vette": 3,
+  "isole": 4,
+}
+
 const enemy_types = {
   "-1002": "Castello dei Corvicremisi",
   "-1000": "Feudatario Straniero",
-  "-651": "Accampamento dei Samurai",
-  "-601": "Accampamento Nomade",
-  "-411": "Accampamento dei Leoni",
-  "-410": "Accampamento degli Orsi",
-  "-230": "Fortezza del Deserto",
-  "-223": "Forte della Tempesta",
-  "-222": "Torre delle Vette",
-  "-221": "Torre dei Barbari",
-  "-220": "Torre del Deserto",
-  "-205": "Castello Masnadiero",
+  "-651" : "Accampamento dei Samurai",
+  "-601" : "Accampamento Nomade",
+  "-411" : "Accampamento dei Leoni",
+  "-410" : "Accampamento degli Orsi",
+  "-230" : "Fortezza del Deserto",
+  "-223" : "Forte della Tempesta",
+  "-222" : "Torre delle Vette",
+  "-221" : "Torre dei Barbari",
+  "-220" : "Torre del Deserto",
+  "-205" : "Castello Masnadiero",
+  "-204" : "Castello Masnadiero",
+  "-811" : "Castello dei Daymio",
+  "-801" : "Accampamento del Khan"
 }
 
 const msg_types = {
@@ -1004,6 +1748,7 @@ const msg_types = {
 }
 
 const map_objects = {
+  37: "Castello dei Daymio",
   28: "Laboratorio",
   26: "Monumento",
   25: "Forte della Tempesta",
@@ -1013,3 +1758,19 @@ const map_objects = {
   2: "Masnadiero",
   1: "Giocatore"
 }
+
+const time_skips = {
+  "1min" : "MS1", 
+  "5min" : "MS2", 
+  "10min": "MS3", 
+  "30min": "MS4", 
+  "1h"   : "MS5", 
+  "5h"   : "MS6", 
+  "24h"  : "MS7", 
+}
+
+// list of items and units (you may need to change version number) 
+// https://empire-html5.goodgamestudios.com/default/items/items_v646.02.json
+
+// list of translations
+// https://langserv.public.ggs-ep.com/12@3468/it/*?nodecode=1
